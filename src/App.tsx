@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react';
 import styled from 'styled-components';
 import Search from './components/Search/Search';
 import { useDebounce } from './hooks/debounce.hook';
+import Spinner from './components/Spinner/Spinner';
+import FadeIn from './components/FadeIn/FadeIn';
 
 // STYLED COMPONENTS
 const MainWrap = styled.main`
   max-width: 1000px;
-  margin: 2rem auto;
+  margin: 0 auto;
+  padding: 4rem 2rem 2rem 2rem;
   text-align: center;
 `;
 const MovieResults = styled.section`
@@ -28,9 +31,14 @@ const SearchButton = styled.button`
   border-radius: 3px;
   color: #fff;
   width: 6rem;
+  outline: 0;
 
   &:hover {
     background-color: #a72121;
+  }
+
+  &:focus {
+    box-shadow: 0 0 3px 2px #f5a6a6;
   }
 `;
 const Dropdown = styled.ul`
@@ -48,7 +56,7 @@ const Dropdown = styled.ul`
 `;
 const DropdownItem = styled.li`
   border-bottom: 1px solid #e4b3b3;
-  color: #a95555;
+
   margin: 0;
   padding: 0.5em 1rem;
 
@@ -61,6 +69,10 @@ const DropdownItem = styled.li`
   &:last-child {
     border-bottom: none;
   }
+`;
+const DropdownItemButton = styled.button`
+  background-color: none;
+  color: #a95555;
 `;
 const MoviePoster = styled.section`
   font-size: 1.5rem;
@@ -89,7 +101,7 @@ const initSelectedMovie: any = null;
 
 function App(): JSX.Element {
   const [movies, setMovies] = useState([]);
-  const [debouncedSearch, setDebouncedSearch] = useDebounce('', 1500);
+  const [debouncedSearch, setDebouncedSearch] = useDebounce('', 700);
   const [selectedMovie, setSelectedMovie]: [Movie, any] =
     useState(initSelectedMovie);
   const [UIState, setUIState] = useState(UIStates.INITIAL);
@@ -98,9 +110,7 @@ function App(): JSX.Element {
   const [clearSearchVal, setClearSearchVal] = useState(false);
 
   const getMovies = async (searchVal: string) => {
-    setUIState(UIStates.LOADING_RESULTS);
-    // TODO: change api key
-    const url = `http://www.omdbapi.com/?s=${searchVal}&apikey=263d22d8`;
+    const url = `http://www.omdbapi.com/?s=${searchVal}&apikey=902755be`;
 
     const response = await fetch(url);
     const responseJson = await response.json();
@@ -117,10 +127,16 @@ function App(): JSX.Element {
 
   // HOOKS
   useEffect(() => {
-    if (debouncedSearch && debouncedSearch.length > 1) {
-      getMovies(debouncedSearch);
+    if (!debouncedSearch || debouncedSearch.length <= 1) {
+      return;
     }
+
+    setTimeout(() => {
+      getMovies(debouncedSearch);
+    }, 1000);
+
     setClearSearchVal(false);
+    setUIState(UIStates.LOADING_RESULTS);
   }, [debouncedSearch]);
 
   useEffect(() => {
@@ -179,19 +195,40 @@ function App(): JSX.Element {
 
   // RENDERS
   const renderDropdown = () => (
-    <Dropdown>
-      {searchNotFound && <DropdownItem>Not found</DropdownItem>}
-      {movies.map(({ Title, imdbID }: Movie) => (
-        <DropdownItem
-          key={imdbID}
-          data-id={imdbID}
-          onClick={handleSearchItemClick}
-        >
-          {Title}
-        </DropdownItem>
-      ))}
-    </Dropdown>
+    <FadeIn>
+      <Dropdown>
+        {searchNotFound && (
+          <DropdownItem>
+            Not found. Select one below or search again.
+          </DropdownItem>
+        )}
+        {movies.map(({ Title, imdbID }: Movie) => (
+          <DropdownItem
+            key={imdbID}
+            data-id={imdbID}
+            onClick={handleSearchItemClick}
+          >
+            {Title}
+          </DropdownItem>
+        ))}
+      </Dropdown>
+    </FadeIn>
   );
+
+  const renderPoster = () => {
+    if (selectedMovie.Poster && selectedMovie.Poster !== 'N/A') {
+      return <img src={selectedMovie.Poster} alt={selectedMovie.Title} />;
+    } else {
+      return (
+        !isInState(UIStates.VIEWING_RESULTS) && (
+          <PosterPlaceholder>
+            Sorry, we couldn&apos;t retrieve the poster for this selection.
+            Please try another.
+          </PosterPlaceholder>
+        )
+      );
+    }
+  };
 
   return (
     <MainWrap>
@@ -203,24 +240,21 @@ function App(): JSX.Element {
             handleFocus={handleSearchFocus}
           ></Search>
         </SearchWrap>
-        <SearchButton onClick={handleSearchButtonClick}>
-          {isInState(UIStates.LOADING_RESULTS) ? 'Loading' : 'Search'}
-        </SearchButton>
+        <SearchButton onClick={handleSearchButtonClick}>Search</SearchButton>
         {canShowResults() && renderDropdown()}
       </MovieResults>
 
       <MoviePoster>
         {canShowPoster() ? (
-          selectedMovie.Poster ? (
-            <img src={selectedMovie.Poster} />
-          ) : (
-            <PosterPlaceholder>
-              Sorry, we couldn&apos;t retrieve the poster for this selection.
-              Please try another.
-            </PosterPlaceholder>
-          )
+          renderPoster()
         ) : (
-          <PosterPlaceholder>To see its Poster here!</PosterPlaceholder>
+          <PosterPlaceholder>
+            {isInState(UIStates.LOADING_RESULTS) ? (
+              <Spinner />
+            ) : (
+              'To see its Poster here!'
+            )}
+          </PosterPlaceholder>
         )}
       </MoviePoster>
     </MainWrap>

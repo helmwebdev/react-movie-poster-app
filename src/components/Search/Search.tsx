@@ -16,8 +16,14 @@ const SearchInput = styled.input`
   outline: none;
   width: 100%;
 
-  ::placeholder {
+  &::placeholder {
     color: #000;
+  }
+
+  &:focus {
+    ::placeholder {
+      color: #252525;
+    }
   }
 `;
 
