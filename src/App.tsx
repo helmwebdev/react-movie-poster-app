@@ -3,60 +3,99 @@ import styled from 'styled-components';
 import Search from './components/Search/Search';
 import { useDebounce } from './hooks/debounce.hook';
 
+// STYLED COMPONENTS
 const MainWrap = styled.main`
   max-width: 1000px;
   margin: 2rem auto;
   text-align: center;
 `;
 const MovieResults = styled.section`
+  display: flex;
   position: relative;
+  max-width: 500px;
+  margin: 0 auto;
 `;
-const SearchWrap = styled.main`
-  display: inline;
+const SearchWrap = styled.div`
+  flex: 1;
   margin-right: 1rem;
 `;
 const SearchButton = styled.button`
-  font-size: 1.5rem;
-  display: inline;
+  cursor: pointer;
+  font-size: 1rem;
+  margin-left: 1em;
+  background-color: #8a1717;
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  width: 6rem;
+
+  &:hover {
+    background-color: #a72121;
+  }
 `;
 const Dropdown = styled.ul`
-  background-color: #fff;
+  background-color: #ffe9e9;
+  border-radius: 5px;
   font-size: 1.2rem;
   list-style: none;
   margin: 0;
   padding: 0;
   position: absolute;
-  top: 100%;
+  top: calc(100% + 1rem);
+  left: 0;
+  right: 0;
+  overflow: hidden;
 `;
 const DropdownItem = styled.li`
-  color: green;
+  border-bottom: 1px solid #e4b3b3;
+  color: #a95555;
   margin: 0;
   padding: 0.5em 1rem;
-`;
-const MoviePoster = styled.section``;
 
+  &:hover {
+    background-color: #ffb3b3;
+    color: #000;
+    cursor: pointer;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+`;
+const MoviePoster = styled.section`
+  font-size: 1.5rem;
+  padding-top: 2em;
+  text-align: center;
+`;
+const PosterPlaceholder = styled.section``;
+
+// Interfaces
+interface Movie {
+  imdbID: string;
+  Title: string;
+  Poster: string;
+}
+
+// STATE HANDLING
 enum UIStates {
   INITIAL,
   LOADING_RESULTS,
   VIEWING_RESULTS,
   VIEWING_POSTER,
+  VIEWING_RESULTS_AND_POSTER,
 }
 
 const initSelectedMovie: any = null;
 
 function App(): JSX.Element {
   const [movies, setMovies] = useState([]);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useDebounce('');
-  const [selectedMovie, setSelectedMovie] = useState(initSelectedMovie);
+  const [debouncedSearch, setDebouncedSearch] = useDebounce('', 1500);
+  const [selectedMovie, setSelectedMovie]: [Movie, any] =
+    useState(initSelectedMovie);
   const [UIState, setUIState] = useState(UIStates.INITIAL);
   const [searchUsedForButtonClick, setSearchUsedForButtonClick] = useState('');
   const [searchNotFound, setSearchNotFound] = useState(false);
-
-  const handleSearchUpdate = (v: string) => {
-    setSearch(v);
-    setDebouncedSearch(v);
-  };
+  const [clearSearchVal, setClearSearchVal] = useState(false);
 
   const getMovies = async (searchVal: string) => {
     setUIState(UIStates.LOADING_RESULTS);
@@ -67,7 +106,8 @@ function App(): JSX.Element {
     const responseJson = await response.json();
 
     if (responseJson.Search) {
-      setMovies(responseJson.Search);
+      // we should only use the first 10 results
+      setMovies(responseJson.Search.slice(0, 10));
       setSearchNotFound(false);
     } else {
       setSearchNotFound(true);
@@ -75,25 +115,32 @@ function App(): JSX.Element {
     setUIState(UIStates.VIEWING_RESULTS);
   };
 
+  // HOOKS
   useEffect(() => {
     if (debouncedSearch && debouncedSearch.length > 1) {
       getMovies(debouncedSearch);
     }
+    setClearSearchVal(false);
   }, [debouncedSearch]);
 
   useEffect(() => {
     setUIState(UIStates.VIEWING_POSTER);
   }, [selectedMovie]);
 
+  // EVENT HANDLERS
+  const handleSearchUpdate = (v: string) => {
+    setDebouncedSearch(v);
+  };
+
   const handleSearchButtonClick = (e: any) => {
     e.preventDefault();
 
-    if (search === searchUsedForButtonClick) {
+    if (debouncedSearch === searchUsedForButtonClick) {
       return;
     }
 
-    getMovies(search);
-    setSearchUsedForButtonClick(search);
+    getMovies(debouncedSearch);
+    setSearchUsedForButtonClick(debouncedSearch);
   };
 
   const handleSearchItemClick = (e: any) => {
@@ -104,6 +151,7 @@ function App(): JSX.Element {
     );
 
     setSelectedMovie(selectedMovie);
+    setClearSearchVal(true);
   };
 
   const handleSearchFocus = () => {
@@ -112,6 +160,7 @@ function App(): JSX.Element {
     }
   };
 
+  // MAIN STATE HANDLING
   const isInState = (state: UIStates) => {
     return UIState === state;
   };
@@ -128,37 +177,51 @@ function App(): JSX.Element {
     );
   };
 
+  // RENDERS
+  const renderDropdown = () => (
+    <Dropdown>
+      {searchNotFound && <DropdownItem>Not found</DropdownItem>}
+      {movies.map(({ Title, imdbID }: Movie) => (
+        <DropdownItem
+          key={imdbID}
+          data-id={imdbID}
+          onClick={handleSearchItemClick}
+        >
+          {Title}
+        </DropdownItem>
+      ))}
+    </Dropdown>
+  );
+
   return (
     <MainWrap>
       <MovieResults>
         <SearchWrap>
           <Search
-            searchVal={search}
-            setSearchVal={handleSearchUpdate}
+            clearSearchVal={clearSearchVal}
+            handleChange={handleSearchUpdate}
             handleFocus={handleSearchFocus}
           ></Search>
         </SearchWrap>
-        <SearchButton onClick={handleSearchButtonClick}>Search</SearchButton>
-        {canShowResults() && (
-          <Dropdown>
-            {searchNotFound && <DropdownItem>Not found</DropdownItem>}
-            {movies.map(
-              ({ Title, imdbID }: { Title: string; imdbID: string }) => (
-                <DropdownItem
-                  key={imdbID}
-                  data-id={imdbID}
-                  onClick={handleSearchItemClick}
-                >
-                  {Title}
-                </DropdownItem>
-              ),
-            )}
-          </Dropdown>
-        )}
+        <SearchButton onClick={handleSearchButtonClick}>
+          {isInState(UIStates.LOADING_RESULTS) ? 'Loading' : 'Search'}
+        </SearchButton>
+        {canShowResults() && renderDropdown()}
       </MovieResults>
 
       <MoviePoster>
-        {canShowPoster() && <img src={selectedMovie.Poster} />}
+        {canShowPoster() ? (
+          selectedMovie.Poster ? (
+            <img src={selectedMovie.Poster} />
+          ) : (
+            <PosterPlaceholder>
+              Sorry, we couldn&apos;t retrieve the poster for this selection.
+              Please try another.
+            </PosterPlaceholder>
+          )
+        ) : (
+          <PosterPlaceholder>To see its Poster here!</PosterPlaceholder>
+        )}
       </MoviePoster>
     </MainWrap>
   );

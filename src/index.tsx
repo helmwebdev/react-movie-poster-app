@@ -8,8 +8,9 @@ export const GlobalStyle = createGlobalStyle`
   ${normalize}
 
   body {
+    font-family: Arial, sans-serif;
     padding: 0;
-    background-color: darkblue;
+    background-color: #c53c3c;
   }
 `;
 
