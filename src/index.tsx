@@ -7,10 +7,14 @@ import App from './App';
 export const GlobalStyle = createGlobalStyle`
   ${normalize}
 
+  html {
+    background: linear-gradient(#ff6b6b, #c53c3c);
+    background-size: cover;
+    height: 100%;
+  }
   body {
     font-family: Arial, sans-serif;
     padding: 0;
-    background-color: #c53c3c;
   }
 `;
 

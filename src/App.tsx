@@ -1,85 +1,22 @@
-import { useEffect, useState } from 'react';
-import styled from 'styled-components';
+import { useRef, useState } from 'react';
 import Search from './components/Search/Search';
 import { useDebounce } from './hooks/debounce.hook';
 import Spinner from './components/Spinner/Spinner';
 import FadeIn from './components/FadeIn/FadeIn';
-
-// STYLED COMPONENTS
-const MainWrap = styled.main`
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 4rem 2rem 2rem 2rem;
-  text-align: center;
-`;
-const MovieResults = styled.section`
-  display: flex;
-  position: relative;
-  max-width: 500px;
-  margin: 0 auto;
-`;
-const SearchWrap = styled.div`
-  flex: 1;
-  margin-right: 1rem;
-`;
-const SearchButton = styled.button`
-  cursor: pointer;
-  font-size: 1rem;
-  margin-left: 1em;
-  background-color: #8a1717;
-  border: none;
-  border-radius: 3px;
-  color: #fff;
-  width: 6rem;
-  outline: 0;
-
-  &:hover {
-    background-color: #a72121;
-  }
-
-  &:focus {
-    box-shadow: 0 0 3px 2px #f5a6a6;
-  }
-`;
-const Dropdown = styled.ul`
-  background-color: #ffe9e9;
-  border-radius: 5px;
-  font-size: 1.2rem;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  position: absolute;
-  top: calc(100% + 1rem);
-  left: 0;
-  right: 0;
-  overflow: hidden;
-`;
-const DropdownItem = styled.li`
-  border-bottom: 1px solid #e4b3b3;
-
-  margin: 0;
-  padding: 0.5em 1rem;
-
-  &:hover {
-    background-color: #ffb3b3;
-    color: #000;
-    cursor: pointer;
-  }
-
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-const DropdownItemButton = styled.button`
-  background-color: none;
-  color: #a95555;
-`;
-const MoviePoster = styled.section`
-  font-size: 1.5rem;
-  padding-top: 2em;
-  text-align: center;
-`;
-const PosterPlaceholder = styled.section``;
+import {
+  MainWrap,
+  MovieResults,
+  SearchWrap,
+  SearchButton,
+  Dropdown,
+  DropdownItem,
+  DropdownItemNotFound,
+  DropdownItemButton,
+  PosterPlaceholder,
+  MoviePoster,
+} from './App.styles';
+import { useKeyPress } from './hooks/keypress.hook';
+import useDidMountEffect from './hooks/did-mount-effect.hook';
 
 // Interfaces
 interface Movie {
@@ -98,8 +35,10 @@ enum UIStates {
 }
 
 const initSelectedMovie: any = null;
+const numOfDropdownItems = 10;
 
 function App(): JSX.Element {
+  // STATE HOOKS
   const [movies, setMovies] = useState([]);
   const [debouncedSearch, setDebouncedSearch] = useDebounce('', 700);
   const [selectedMovie, setSelectedMovie]: [Movie, any] =
@@ -109,6 +48,55 @@ function App(): JSX.Element {
   const [searchNotFound, setSearchNotFound] = useState(false);
   const [clearSearchVal, setClearSearchVal] = useState(false);
 
+  // DOM REFS
+  const dropdownRef = useRef();
+
+  // KEYBOARD HOOKS
+  const upKeyPressed: boolean = useKeyPress('ArrowUp');
+  const downKeyPressed: boolean = useKeyPress('ArrowDown');
+  const enterKeyPressed: boolean = useKeyPress('Enter');
+
+  // EFFECT HOOKS
+  useDidMountEffect(() => {
+    if (!debouncedSearch || debouncedSearch.length <= 1) {
+      return;
+    }
+
+    setUIState(UIStates.LOADING_RESULTS);
+
+    // Intentional delay to show loading spinner
+    setTimeout(() => {
+      getMovies(debouncedSearch);
+    }, 500);
+
+    setClearSearchVal(false);
+    setSelectedMovie(null);
+  }, [debouncedSearch]);
+
+  useDidMountEffect(() => {
+    if (selectedMovie) {
+      setUIState(UIStates.VIEWING_POSTER);
+    }
+  }, [selectedMovie]);
+
+  // TODO: move to Dropdown component
+  useDidMountEffect(() => {
+    const dropdown = dropdownRef.current;
+    if (!dropdown) {
+      return;
+    }
+    if (upKeyPressed) {
+      focusOnItem(dropdown, 'up');
+    }
+    if (downKeyPressed) {
+      focusOnItem(dropdown, 'down');
+    }
+    if (enterKeyPressed) {
+      selectMovieWithEnterKey();
+    }
+  }, [upKeyPressed, downKeyPressed, enterKeyPressed]);
+
+  // API CALLS
   const getMovies = async (searchVal: string) => {
     const url = `http://www.omdbapi.com/?s=${searchVal}&apikey=902755be`;
 
@@ -117,7 +105,7 @@ function App(): JSX.Element {
 
     if (responseJson.Search) {
       // we should only use the first 10 results
-      setMovies(responseJson.Search.slice(0, 10));
+      setMovies(responseJson.Search.slice(0, numOfDropdownItems));
       setSearchNotFound(false);
     } else {
       setSearchNotFound(true);
@@ -125,23 +113,36 @@ function App(): JSX.Element {
     setUIState(UIStates.VIEWING_RESULTS);
   };
 
-  // HOOKS
-  useEffect(() => {
-    if (!debouncedSearch || debouncedSearch.length <= 1) {
-      return;
+  // DOM MANIPULATION
+  // TODO: move these focus functions to Dropdown component
+  const focusOnItem = (dropdown: any, key: 'up' | 'down') => {
+    const dataIdAttr: any = 'data-id';
+    const currentId: number = parseInt(
+      document.activeElement?.attributes[dataIdAttr]?.value || '-1',
+    );
+    if (key === 'up') {
+      focusPrevious(dropdown, currentId);
     }
+    if (key === 'down') {
+      focusNext(dropdown, currentId);
+    }
+  };
 
-    setTimeout(() => {
-      getMovies(debouncedSearch);
-    }, 1000);
+  const focusPrevious = (dropdown: any, currentId: number) => {
+    if (currentId === 0) {
+      return;
+    } else {
+      dropdown.querySelector(`[data-id="${currentId - 1}"]`).focus();
+    }
+  };
 
-    setClearSearchVal(false);
-    setUIState(UIStates.LOADING_RESULTS);
-  }, [debouncedSearch]);
-
-  useEffect(() => {
-    setUIState(UIStates.VIEWING_POSTER);
-  }, [selectedMovie]);
+  const focusNext = (dropdown: any, currentId: number) => {
+    if (currentId === numOfDropdownItems - 1) {
+      return;
+    } else {
+      dropdown.querySelector(`[data-id="${currentId + 1}"]`).focus();
+    }
+  };
 
   // EVENT HANDLERS
   const handleSearchUpdate = (v: string) => {
@@ -159,15 +160,11 @@ function App(): JSX.Element {
     setSearchUsedForButtonClick(debouncedSearch);
   };
 
+  // TODO: move to Dropdown component
   const handleSearchItemClick = (e: any) => {
     e.preventDefault();
-    const selectedId = e.target.attributes['data-id'].value;
-    const selectedMovie = movies.find(
-      (movie: any) => movie.imdbID === selectedId,
-    );
-
-    setSelectedMovie(selectedMovie);
-    setClearSearchVal(true);
+    const selectedId = e.target.attributes['data-imdbid'].value;
+    selectMoviePoster(selectedId);
   };
 
   const handleSearchFocus = () => {
@@ -193,27 +190,76 @@ function App(): JSX.Element {
     );
   };
 
+  // OTHER STATE HANDLING
+  // TODO: move to Dropdown component
+  // TODO: this named function style should probably be preferred over arrow functions for debugging and maintenance purposes
+  function selectMovieWithEnterKey() {
+    const dataIdAttr: any = 'data-id';
+    const elementDataId: string | undefined =
+      document.activeElement?.attributes[dataIdAttr]?.value;
+    const imdbIdAttr: any = 'data-imdbid';
+    const imdbId: string | undefined =
+      document.activeElement?.attributes[imdbIdAttr]?.value;
+    if (elementDataId && imdbId) {
+      selectMoviePoster(imdbId);
+    }
+  }
+
+  function selectMoviePoster(selectedId: any) {
+    const selectedMovie = movies.find(
+      (movie: any) => movie.imdbID === selectedId,
+    );
+
+    setSelectedMovie(selectedMovie);
+    setClearSearchVal(true);
+  }
+
   // RENDERS
+  // TODO: move to Dropdown component
   const renderDropdown = () => (
     <FadeIn>
-      <Dropdown>
+      <Dropdown ref={dropdownRef}>
         {searchNotFound && (
           <DropdownItem>
-            Not found. Select one below or search again.
+            <DropdownItemNotFound>
+              Not found. Select one below or search again.
+            </DropdownItemNotFound>
           </DropdownItem>
         )}
-        {movies.map(({ Title, imdbID }: Movie) => (
+        {movies.map(({ Title, imdbID }: Movie, index) => (
           <DropdownItem
             key={imdbID}
             data-id={imdbID}
             onClick={handleSearchItemClick}
           >
-            {Title}
+            <DropdownItemButton
+              type="button"
+              data-id={index}
+              data-imdbid={imdbID}
+            >
+              {Title}
+            </DropdownItemButton>
           </DropdownItem>
         ))}
       </Dropdown>
     </FadeIn>
   );
+
+  const renderPosterPlaceholder = () => {
+    return (
+      <PosterPlaceholder>
+        {isInState(UIStates.LOADING_RESULTS) ? (
+          <Spinner />
+        ) : (
+          seePosterHereText()
+        )}
+      </PosterPlaceholder>
+    );
+  };
+
+  const seePosterHereText = () => {
+    return isInState(UIStates.VIEWING_RESULTS) ? '' : 'To see its Poster here!';
+  };
 
   const renderPoster = () => {
     if (selectedMovie.Poster && selectedMovie.Poster !== 'N/A') {
@@ -240,22 +286,16 @@ function App(): JSX.Element {
             handleFocus={handleSearchFocus}
           ></Search>
         </SearchWrap>
-        <SearchButton onClick={handleSearchButtonClick}>Search</SearchButton>
+        {/** TODO: remove the search button since it's confusing UX, but was part of
+        requirements */}
+        <SearchButton type="button" onClick={handleSearchButtonClick}>
+          Search
+        </SearchButton>
         {canShowResults() && renderDropdown()}
       </MovieResults>
 
       <MoviePoster>
-        {canShowPoster() ? (
-          renderPoster()
-        ) : (
-          <PosterPlaceholder>
-            {isInState(UIStates.LOADING_RESULTS) ? (
-              <Spinner />
-            ) : (
-              'To see its Poster here!'
-            )}
-          </PosterPlaceholder>
-        )}
+        {canShowPoster() ? renderPoster() : renderPosterPlaceholder()}
       </MoviePoster>
     </MainWrap>
   );
